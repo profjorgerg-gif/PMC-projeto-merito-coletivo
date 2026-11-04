@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
-import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, db, configurado } from "./firebase.js";
 import { TRI, PER, fmt, r2, normCode, ordemTurma, anual, valorDe, classificar, periodoAnterior, DADOS_PLANILHA } from "./ranking.js";
 import { extrairNotas, mediaDoLancamento } from "./pdfNotas.js";
@@ -31,12 +31,27 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState(() => location.hash.slice(1) || "ranking");
   const [toast, setToast] = useState("");
+  const [verificando, setVerificando] = useState(true);
+  const [negado, setNegado] = useState("");
 
   const avisar = (t) => { setToast(t); clearTimeout(avisar._t); avisar._t = setTimeout(() => setToast(""), 3500); };
 
   useEffect(() => {
     if (!configurado) return;
-    const u1 = onAuthStateChanged(auth, setUser);
+    // Só entra quem as regras do Firestore reconhecem como professor (coleção "privado").
+    const u1 = onAuthStateChanged(auth, async (u) => {
+      if (!u) { setUser(null); setVerificando(false); return; }
+      setVerificando(true);
+      try {
+        await getDoc(doc(db, "privado", "professor"));
+        setNegado(""); setUser(u);
+      } catch (e) {
+        console.warn(e);
+        setNegado(u.email || "esta conta"); setUser(null);
+        await signOut(auth);
+      }
+      setVerificando(false);
+    });
     const u2 = onSnapshot(collection(db, "turmas"), (snap) => {
       const t = {};
       snap.docs.forEach((d) => { const x = d.data(); t[d.id] = { codigo: d.id, notas: { t1: null, t2: null, t3: null, ...(x.notas || {}) }, fontes: x.fontes || {} }; });
@@ -54,6 +69,10 @@ export default function App() {
 
   const ir = (v) => { setView(v); history.replaceState(null, "", "#" + v); window.scrollTo(0, 0); };
   const v = !user && view !== "ranking" && view !== "login" ? "login" : user && view === "login" ? "lancar" : view;
+
+  if (configurado && v === "login") {
+    return <Login negado={negado} verificando={verificando} voltar={() => ir("ranking")} />;
+  }
 
   if (!configurado) {
     return (
@@ -85,7 +104,6 @@ export default function App() {
     >
       {erroDados && <div className="status bad">{erroDados}</div>}
       {v === "ranking" && <Ranking turmas={turmas} config={config} carregando={carregando} />}
-      {v === "login" && <Login avisar={avisar} />}
       {v === "lancar" && user && <Lancar turmas={turmas} avisar={avisar} />}
       {v === "turmas" && user && <Turmas turmas={turmas} config={config} avisar={avisar} />}
       {toast && <div className="toast" role="status">{toast}</div>}
@@ -209,8 +227,8 @@ function Quadro({ turmas }) {
   );
 }
 
-/* ---------------- login ---------------- */
-function Login({ avisar }) {
+/* ---------------- login (Modelo A · Pódio) ---------------- */
+function Login({ negado, verificando, voltar }) {
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const entrar = async () => {
@@ -218,8 +236,7 @@ function Login({ avisar }) {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
-      const res = await signInWithPopup(auth, provider);
-      avisar("Bem-vindo, " + (res.user.displayName || res.user.email) + ".");
+      await signInWithPopup(auth, provider);
     } catch (err) {
       console.warn(err);
       if (err && (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request")) setErro("");
@@ -229,12 +246,36 @@ function Login({ avisar }) {
     }
     setOcupado(false);
   };
+  const msg = erro || (negado ? `A conta ${negado} não tem acesso à Área do professor.` : "");
   return (
-    <div className="panel stack" style={{ maxWidth: 440 }}>
-      <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Acesso restrito</span><h2>Área do professor</h2></div>
-      <p className="note" style={{ margin: 0 }}>O ranking é público. Para lançar notas, entre com a conta Google do professor. Outras contas conseguem entrar, mas não conseguem alterar o ranking.</p>
-      {erro && <div className="status bad">{erro}</div>}
-      <div><button className="btn primary" disabled={ocupado} onClick={entrar}>Entrar com Google</button></div>
+    <div className="lp">
+      <div className="lp-main">
+        <div className="lp-hero">
+          <span className="lp-eyebrow">CEDUP HERMANN HERING · Gestão de Pessoas · Ano letivo 2026</span>
+          <h1>Projeto Mérito Coletivo: a turma que vence junto.</h1>
+          <p className="lp-lead">Ranking oficial de desempenho coletivo. As médias das turmas são calculadas a partir dos relatórios de notas e classificadas do 1º ao último lugar.</p>
+          <ul className="lp-list">
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /><path d="M8 14h8M8 18h5" /></svg>Importação das notas por PDF, turma a turma</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>Média coletiva calculada e conferida antes de gravar</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg>Ranking por trimestre e classificação anual da Turma Destaque</li>
+          </ul>
+          <div className="lp-podium" aria-hidden="true">
+            <div className="p2">2º</div><div className="p1">1º</div><div className="p3">3º</div>
+          </div>
+        </div>
+        <div className="lp-card">
+          <h2>Área do professor</h2>
+          <p>Acesso exclusivo do professor responsável para lançar e atualizar as notas das turmas.</p>
+          {msg && <div className="lp-erro" role="alert">{msg}</div>}
+          <button type="button" className="lp-google" onClick={entrar} disabled={ocupado || verificando}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.2z" /><path d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z" opacity=".85" /><path d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2z" opacity=".7" /><path d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 5.9 12 5.9z" opacity=".55" /></svg>
+            {verificando ? "Verificando acesso…" : "Continuar com Google"}
+          </button>
+          <p className="lp-small">Somente a conta Google autorizada pode alterar o ranking. Outras contas não têm acesso.</p>
+          <button type="button" className="lp-link" onClick={voltar}>← Ver o ranking das turmas</button>
+        </div>
+      </div>
+      <footer className="lp-foot">© 2026 Jorge Lima Cardoso · Projeto Mérito Coletivo · CEDUP Hermann Hering</footer>
     </div>
   );
 }

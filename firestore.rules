@@ -17,5 +17,9 @@ service cloud.firestore {
       allow read: if true;
       allow write: if ehProfessor();
     }
+    // Usado pelo site para conferir se a conta que entrou é de professor.
+    match /privado/{doc} {
+      allow read, write: if ehProfessor();
+    }
   }
 }
