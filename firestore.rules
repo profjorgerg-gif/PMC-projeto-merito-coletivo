@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Quem pode ALTERAR o ranking: troque pelo(s) e-mail(s) do(s) professor(es).
+    function ehProfessor() {
+      return request.auth != null
+        && request.auth.token.email in ['SEU-EMAIL@gmail.com'];
+    }
+
+    // O ranking é público para leitura (alunos e turmas veem pelo link).
+    match /turmas/{turma} {
+      allow read: if true;
+      allow write: if ehProfessor();
+    }
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if ehProfessor();
+    }
+  }
+}
