@@ -155,3 +155,6 @@ summary{cursor:pointer;font-weight:600}
 .lp-link:hover{color:#f3cd6a;text-decoration:underline}
 .lp-foot{border-top:1px solid #1f3266;padding:20px 16px;text-align:center;font-size:13px;color:#8f9cbc}
 @media (max-width:560px){.lp-card{padding:32px 24px}.lp-podium div{width:64px}}
+
+nav.tabs .brand{display:flex;align-items:center;gap:8px}
+nav.tabs .brand svg{width:22px;height:22px;fill:none;stroke:#e3b340;stroke-width:1.8}

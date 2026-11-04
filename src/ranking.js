@@ -2,7 +2,7 @@
 export const TRI = ["t1", "t2", "t3"];
 export const PER = { t1: "1º Trimestre", t2: "2º Trimestre", t3: "3º Trimestre", anual: "Anual" };
 
-export const r2 = (v) => Math.round(v * 100) / 100;
+export const r2 = (v) => Math.round(Number((v * 100).toFixed(6))) / 100; // 6,745 → 6,75 (como no Excel)
 export const fmt = (v) => (v == null || isNaN(v) ? "—" : v.toFixed(2).replace(".", ","));
 export const ordemTurma = (a, b) => a.localeCompare(b, "pt", { numeric: true });
 

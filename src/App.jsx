@@ -4,7 +4,7 @@ import { collection, doc, getDoc, onSnapshot, setDoc, deleteDoc, writeBatch } fr
 import { auth, db, configurado } from "./firebase.js";
 import { TRI, PER, fmt, r2, normCode, ordemTurma, anual, valorDe, classificar, periodoAnterior, DADOS_PLANILHA } from "./ranking.js";
 import { extrairNotas, mediaDoLancamento } from "./pdfNotas.js";
-import cabecalho from "./cabecalho.jpg";
+import { baixarRelatorioPdf } from "./relatorioPdf.js";
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 const dataBR = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
@@ -114,10 +114,7 @@ export default function App() {
 function Shell({ nav, children }) {
   return (
     <>
-      <header className="banner"><div className="wrap">
-        <img src={cabecalho} alt="Estado de Santa Catarina – CEDUP Hermann Hering – Projeto Mérito Coletivo, Turma Destaque do Ano 2026. Disciplina Gestão de Pessoas, Prof. Jorge Lima Cardoso." />
-      </div></header>
-      <nav className="tabs"><div className="wrap"><span className="brand">Mérito Coletivo</span>{nav}</div></nav>
+      <nav className="tabs"><div className="wrap"><span className="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></svg>Projeto Mérito Coletivo</span>{nav}</div></nav>
       <main className="wrap">{children}</main>
     </>
   );
@@ -191,12 +188,18 @@ function Ranking({ turmas, config, carregando }) {
           </>
         )}
       </div>
-      <Quadro turmas={turmas} />
+      <Quadro turmas={turmas} config={config} />
     </section>
   );
 }
 
-function Quadro({ turmas }) {
+function Quadro({ turmas, config }) {
+  const [gerando, setGerando] = useState(false);
+  const baixarPdf = async () => {
+    setGerando(true);
+    try { await baixarRelatorioPdf(turmas, config); } catch (e) { console.warn(e); alert("Não foi possível gerar o relatório agora."); }
+    setGerando(false);
+  };
   const codes = Object.keys(turmas).sort(ordemTurma);
   const ps = ["t1", "t2", "t3", "anual"];
   const R = useMemo(() => { const o = {}; ps.forEach((p) => { o[p] = {}; classificar(turmas, p).com.forEach((x) => (o[p][x.code] = x.pos)); }); return o; }, [turmas]);
@@ -212,7 +215,12 @@ function Quadro({ turmas }) {
     <div className="panel stack">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Quadro geral</span><h3>Média e posição de cada turma por período</h3></div>
-        {codes.length > 0 && <button className="btn small" onClick={baixarCsv}>Baixar CSV</button>}
+        {codes.length > 0 && (
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn small primary" onClick={baixarPdf} disabled={gerando}>{gerando ? "Gerando…" : "Baixar relatório (PDF)"}</button>
+            <button className="btn small" onClick={baixarCsv}>Baixar CSV</button>
+          </div>
+        )}
       </div>
       <div className="tblwrap"><table>
         <thead><tr><th>Turma</th>{ps.map((p) => <React.Fragment key={p}><th className="n">{p === "anual" ? "Anual (parcial)" : PER[p]}</th><th className="n">Posição</th></React.Fragment>)}</tr></thead>
